@@ -66,16 +66,18 @@ def start_tcp_transport(port: int, host: 'Optional[str]' = None) -> 'Transport':
     raise Exception("Timeout connecting to socket")
 
 
-def build_message(content: str) -> str:
-    content_length = len(content)
-    result = "Content-Length: {}\r\n\r\n{}".format(content_length, content)
-    return result
+def build_message(content: str) -> bytes:
+    contentbytes = bytes(content, 'UTF-8')
+    content_length = len(contentbytes)
+    header = "Content-Length: {}\r\n\r\n".format(content_length)
+
+    return bytes(header, 'UTF-8') + contentbytes
 
 
 class TCPTransport(Transport):
     def __init__(self, socket: 'Any') -> None:
         self.socket = socket  # type: 'Optional[Any]'
-        self.send_queue = Queue()  # type: Queue[Optional[str]]
+        self.send_queue = Queue()  # type: Queue[Optional[bytes]]
 
     def start(self, on_receive: 'Callable[[str], None]', on_closed: 'Callable[[], None]') -> None:
         self.on_receive = on_receive
@@ -147,7 +149,7 @@ class TCPTransport(Transport):
                 break
             else:
                 try:
-                    self.socket.sendall(bytes(message, 'UTF-8'))
+                    self.socket.sendall(message)
                 except Exception as err:
                     exception_log("Failure writing to socket", err)
                     self.close()
@@ -156,7 +158,7 @@ class TCPTransport(Transport):
 class StdioTransport(Transport):
     def __init__(self, process: 'subprocess.Popen') -> None:
         self.process = process  # type: Optional[subprocess.Popen]
-        self.send_queue = Queue()  # type: Queue[Optional[str]]
+        self.send_queue = Queue()  # type: Queue[Optional[bytes]]
 
     def start(self, on_receive: 'Callable[[str], None]', on_closed: 'Callable[[], None]') -> None:
         self.on_receive = on_receive
@@ -222,8 +224,7 @@ class StdioTransport(Transport):
                 break
             else:
                 try:
-                    msgbytes = bytes(message, 'UTF-8')
-                    self.process.stdin.write(msgbytes)
+                    self.process.stdin.write(message)
                     self.process.stdin.flush()
                 except (BrokenPipeError, OSError) as err:
                     exception_log("Failure writing to stdout", err)
